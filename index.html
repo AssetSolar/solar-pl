@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar P&L — Powered by GetPylon</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap');
+
+  :root {
+    --navy: #0f2137;
+    --navy-light: #1a3a5c;
+    --sun: #f5a623;
+    --sun-light: #fdf3e0;
+    --green: #1a7a4a;
+    --green-light: #e6f5ed;
+    --red: #c0392b;
+    --red-light: #fdecea;
+    --gray-50: #f8f9fa;
+    --gray-100: #f0f2f5;
+    --gray-200: #e2e8f0;
+    --gray-400: #94a3b8;
+    --gray-600: #475569;
+    --gray-800: #1e293b;
+    --white: #ffffff;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--navy);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 58px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--white);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+
+  .logo-sun {
+    width: 28px; height: 28px;
+    background: var(--sun);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .logo-sun svg { width: 16px; height: 16px; }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .sync-time {
+    font-size: 12px;
+    color: var(--gray-400);
+    font-family: 'DM Mono', monospace;
+  }
+
+  .main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  .nav {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 1.75rem;
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 5px;
+    width: fit-content;
+  }
+
+  .nav-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 16px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--gray-600);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .nav-btn:hover { background: var(--gray-100); }
+  .nav-btn.active { background: var(--navy); color: var(--white); }
+
+  .step { display: none; }
+  .step.active { display: block; }
+
+  .card {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+  }
+
+  .card + .card { margin-top: 1rem; }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--gray-800);
+    margin-bottom: 1rem;
+    letter-spacing: -0.01em;
+  }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--gray-600);
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  input[type=text], input[type=password] {
+    width: 100%;
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 9px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    background: var(--gray-50);
+    color: var(--gray-800);
+    outline: none;
+    transition: border 0.15s;
+    margin-bottom: 12px;
+  }
+
+  input:focus { border-color: var(--navy-light); background: var(--white); }
+
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gray-200);
+    background: var(--white);
+    color: var(--gray-800);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:hover { background: var(--gray-100); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-primary {
+    background: var(--navy);
+    color: var(--white);
+    border-color: var(--navy);
+  }
+
+  .btn-primary:hover { background: var(--navy-light); }
+
+  .btn-google {
+    background: var(--white);
+    border-color: var(--gray-200);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .btn-sun {
+    background: var(--sun);
+    color: var(--navy);
+    border-color: var(--sun);
+    font-weight: 500;
+  }
+
+  .btn-sun:hover { background: #e8961f; }
+
+  .btn-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+  .status-msg {
+    font-size: 13px;
+    color: var(--gray-600);
+  }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 1.5rem;
+  }
+
+  .kpi {
+    background: var(--white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+  }
+
+  .kpi-label { font-size: 12px; color: var(--gray-400); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 300; color: var(--gray-800); letter-spacing: -0.02em; }
+  .kpi-sub { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+  .pl-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    font-size: 14px;
+    border-bottom: 1px solid var(--gray-100);
+  }
+
+  .pl-row:last-child { border-bottom: none; }
+  .pl-row.section-head {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 14px 0 4px;
+    border-bottom: none;
+  }
+
+  .pl-row.total { font-weight: 500; border-top: 1px solid var(--gray-200); border-bottom: none; padding-top: 10px; margin-top: 2px; }
+  .pl-row.gp { background: var(--green-light); border-radius: var(--radius-sm); padding: 10px 12px; margin: 6px 0; border: none; font-weight: 500; }
+  .pl-row.gp-neg { background: var(--red-light); border-radius: var(--radius-sm); padding: 10px 12px; margin: 6px 0; border: none; font-weight: 500; }
+  .indent { padding-left: 12px; color: var(--gray-600); }
+  .mono { font-family: 'DM Mono', monospace; font-size: 13px; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .pct-muted { font-size: 12px; color: var(--gray-400); margin-right: 8px; }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  .badge-green { background: var(--green-light); color: var(--green); }
+  .badge-amber { background: var(--sun-light); color: #b07a10; }
+  .badge-gray  { background: var(--gray-100);  color: var(--gray-600); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+  th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--gray-400);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--gray-200);
+  }
+
+  td {
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--gray-100);
+    color: var(--gray-800);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--gray-50); }
+
+  .hint {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+
+  .sheet-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--navy);
+    font-weight: 500;
+    text-decoration: none;
+    margin-top: 10px;
+    padding: 7px 14px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+  }
+
+  .sheet-link:hover { background: var(--gray-100); }
+
+  select {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 6px 10px;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--gray-800);
+    outline: none;
+  }
+
+  .info-box {
+    background: #eef4ff;
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 13px;
+    color: #2c4a8a;
+    line-height: 1.6;
+    margin-top: 12px;
+  }
+
+  @media (max-width: 700px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .main { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-sun">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="2" x2="12" y2="4"/>
+        <line x1="12" y1="20" x2="12" y2="22"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="2" y1="12" x2="4" y2="12"/>
+        <line x1="20" y1="12" x2="22" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+    </div>
+    Solar P&L
+  </div>
+  <div class="header-right">
+    <span class="sync-time" id="sync-time"></span>
+    <button class="btn btn-sun" onclick="showTab('sheets')" id="header-save-btn" style="display:none;font-size:12px;padding:6px 12px">Save to Sheets</button>
+  </div>
+</header>
+
+<div class="main">
+  <div class="nav">
+    <button class="nav-btn active" onclick="showTab('connect')">Connect</button>
+    <button class="nav-btn" onclick="showTab('pl')">P&L</button>
+    <button class="nav-btn" onclick="showTab('projects')">Projects</button>
+    <button class="nav-btn" onclick="showTab('sheets')">Google Sheets</button>
+  </div>
+
+  <!-- CONNECT -->
+  <div id="step-connect" class="step active">
+    <div class="card" style="max-width:560px">
+      <div class="card-title">Connect to GetPylon</div>
+      <p style="font-size:13px;color:var(--gray-600);margin-bottom:1.25rem;line-height:1.6">Enter your API token to pull live project data. Find it in GetPylon → Team Settings → API.</p>
+      <label>GetPylon API token</label>
+      <input type="password" id="token-input" placeholder="Paste your token here"/>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="loadPylon()" id="load-btn">Load my projects</button>
+        <button class="btn" onclick="loadDemo()">Use demo data</button>
+        <span class="status-msg" id="load-status"></span>
+      </div>
+      <p class="hint">Your token is used only in this session and sent directly to api.getpylon.com — it is never stored elsewhere.</p>
+    </div>
+  </div>
+
+  <!-- P&L -->
+  <div id="step-pl" class="step">
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">Income statement</div>
+        <div id="pl-statement"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Cost breakdown</div>
+        <div id="cost-breakdown"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROJECTS -->
+  <div id="step-projects" class="step">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <div class="card-title" style="margin:0" id="proj-count">Projects</div>
+        <select id="status-filter" onchange="renderProjects()">
+          <option value="">All statuses</option>
+          <option value="Completed">Completed</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Quoted">Quoted</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th style="width:100px">Ref</th>
+            <th style="width:22%">Client</th>
+            <th style="width:95px">Status</th>
+            <th style="width:60px">kW</th>
+            <th style="width:110px;text-align:right">Revenue</th>
+            <th style="width:110px;text-align:right">Costs</th>
+            <th style="width:110px;text-align:right">GP</th>
+            <th style="width:80px;text-align:right">Margin</th>
+          </tr></thead>
+          <tbody id="proj-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEETS -->
+  <div id="step-sheets" class="step">
+    <div class="card" style="max-width:560px">
+      <div class="card-title">Save to Google Sheets</div>
+      <p style="font-size:13px;color:var(--gray-600);margin-bottom:1.25rem;line-height:1.6">Sign in with Google to create a "Solar P&L" spreadsheet in your Drive with all project data and P&L summary.</p>
+      <div class="btn-row">
+        <button class="btn btn-google" onclick="signInGoogle()" id="google-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Sign in with Google
+        </button>
+        <button class="btn btn-sun" onclick="saveToSheets()" id="save-btn" style="display:none">Save to Sheets now</button>
+        <span class="status-msg" id="sheets-status"></span>
+      </div>
+      <div id="sheet-link-wrap" style="display:none">
+        <a id="sheet-link" href="#" target="_blank" class="sheet-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Open your Google Sheet
+        </a>
+      </div>
+      <div class="info-box">
+        Sign-in opens a standard Google popup. Make sure popups are allowed for this page — check your browser's address bar for a blocked popup icon if nothing appears.
+      </div>
+      <p class="hint" style="margin-top:12px">First save creates a new sheet. Subsequent saves update the same one. Overhead assumptions can be added manually in the Assumptions tab.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const CLIENT_ID = '726614095561-3q9pn4uu6h7np3neqe36s4f7ceev0p5g.apps.googleusercontent.com';
+const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+let projects = [];
+let sheetsToken = null;
+let sheetId = null;
+
+const NZD = v => '$' + Math.round(v).toLocaleString('en-NZ');
+const PCT = v => (v * 100).toFixed(1) + '%';
+
+function showTab(t) {
+  ['connect','pl','projects','sheets'].forEach(s => {
+    document.getElementById('step-' + s).classList.toggle('active', s === t);
+  });
+  document.querySelectorAll('.nav-btn').forEach((b, i) => {
+    b.classList.toggle('active', ['connect','pl','projects','sheets'][i] === t);
+  });
+}
+
+function calcProject(p) {
+  const rev = (p.contract_value || 0) + (p.rebate || 0);
+  const costs = (p.materials||0)+(p.labour||0)+(p.subcontractors||0)+(p.permits||0)+(p.other||0);
+  const gp = rev - costs;
+  const margin = rev > 0 ? gp / rev : 0;
+  return {...p, rev, costs, gp, margin};
+}
+
+function loadDemo() {
+  projects = [
+    {id:'PYL-001',name:'Smith Residential',client:'John Smith',address:'12 Sunny Lane, Wellington',date:'2026-01-15',status:'Completed',kw:6.6,contract_value:14500,rebate:1400,materials:4200,labour:2100,subcontractors:0,permits:350,other:150},
+    {id:'PYL-002',name:'Acme Commercial Rooftop',client:'Acme Ltd',address:'45 Industrial Rd, Lower Hutt',date:'2026-02-03',status:'Completed',kw:30,contract_value:62000,rebate:3500,materials:18000,labour:9500,subcontractors:4000,permits:800,other:600},
+    {id:'PYL-003',name:'Jones Residential',client:'Mary Jones',address:'8 River St, Petone',date:'2026-02-28',status:'In Progress',kw:10,contract_value:21000,rebate:1800,materials:6500,labour:3200,subcontractors:0,permits:450,other:200},
+    {id:'PYL-004',name:'Green Fields Farm',client:'Green Fields Trust',address:'Rural Rd, Masterton',date:'2026-03-10',status:'In Progress',kw:50,contract_value:98000,rebate:5000,materials:29000,labour:15000,subcontractors:8000,permits:1200,other:900},
+    {id:'PYL-005',name:'Patel Residential',client:'Raj Patel',address:'33 Bay View, Eastbourne',date:'2026-03-22',status:'Quoted',kw:8,contract_value:17500,rebate:1400,materials:5200,labour:2600,subcontractors:0,permits:380,other:120},
+  ].map(calcProject);
+  document.getElementById('load-status').textContent = 'Demo data loaded';
+  renderAll();
+  showTab('pl');
+}
+
+async function loadPylon() {
+  const token = document.getElementById('token-input').value.trim();
+  if (!token) { document.getElementById('load-status').textContent = 'Please enter your API token'; return; }
+  const btn = document.getElementById('load-btn');
+  btn.disabled = true;
+  document.getElementById('load-status').textContent = 'Fetching from GetPylon...';
+  try {
+    const r = await fetch('https://api.getpylon.com/v1/solar_projects', {
+      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.api+json' }
+    });
+    if (!r.ok) throw new Error('API returned ' + r.status);
+    const data = await r.json();
+    projects = (data.data || []).map(p => {
+      const a = p.attributes || {};
+      const c = a.costs || {};
+      const d = (a.designs || [])[0]?.attributes || {};
+      return calcProject({
+        id: a.reference_number || p.id,
+        name: a.name || '',
+        client: a.customer_details?.name || '',
+        address: [a.site_address?.line1, a.site_address?.city].filter(Boolean).join(', '),
+        date: a.install_date || '',
+        status: a.status || '',
+        kw: d.dc_output_kw || 0,
+        contract_value: c.contract_value || 0,
+        rebate: c.govt_rebate || 0,
+        materials: c.materials || 0,
+        labour: c.labour || 0,
+        subcontractors: c.subcontractors || 0,
+        permits: c.permits || 0,
+        other: c.other || 0,
+      });
+    });
+    document.getElementById('load-status').textContent = projects.length + ' projects loaded';
+    document.getElementById('sync-time').textContent = 'Synced ' + new Date().toLocaleTimeString('en-NZ', {hour:'2-digit',minute:'2-digit'});
+    renderAll();
+    showTab('pl');
+  } catch(e) {
+    document.getElementById('load-status').textContent = 'Error: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+function renderAll() {
+  renderKPIs();
+  renderPL();
+  renderProjects();
+  document.getElementById('header-save-btn').style.display = 'block';
+}
+
+function renderKPIs() {
+  const totalRev   = projects.reduce((s,p) => s + p.rev, 0);
+  const totalGP    = projects.reduce((s,p) => s + p.gp, 0);
+  const totalCosts = projects.reduce((s,p) => s + p.costs, 0);
+  const margin     = totalRev > 0 ? totalGP / totalRev : 0;
+  const totalKW    = projects.reduce((s,p) => s + (p.kw||0), 0);
+  const completed  = projects.filter(p => p.status === 'Completed').length;
+  document.getElementById('kpi-grid').innerHTML = [
+    ['Total revenue',      NZD(totalRev),            projects.length + ' projects'],
+    ['Total costs',        NZD(totalCosts),           'direct costs'],
+    ['Gross profit',       NZD(totalGP),              PCT(margin) + ' margin'],
+    ['kW installed',       totalKW.toFixed(1) + ' kW', completed + ' completed'],
+  ].map(([l,v,s]) => `<div class="kpi"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div><div class="kpi-sub">${s}</div></div>`).join('');
+}
+
+function renderPL() {
+  const sum = k => projects.reduce((s,p) => s + (p[k]||0), 0);
+  const contractRev = sum('contract_value'), rebates = sum('rebate');
+  const totalRev = contractRev + rebates;
+  const mat = sum('materials'), lab = sum('labour'), sub = sum('subcontractors');
+  const per = sum('permits'), oth = sum('other');
+  const totalCosts = mat + lab + sub + per + oth;
+  const gp = totalRev - totalCosts;
+  const margin = totalRev > 0 ? gp / totalRev : 0;
+
+  const row = (label, val, indent) =>
+    `<div class="pl-row"><span class="${indent?'indent':''}">${label}</span><span class="mono">${NZD(val)}</span></div>`;
+  const totRow = (label, val) =>
+    `<div class="pl-row total"><span>${label}</span><span class="mono">${NZD(val)}</span></div>`;
+
+  document.getElementById('pl-statement').innerHTML =
+    `<div class="pl-row section-head">Revenue</div>` +
+    row('Contract revenue', contractRev, true) +
+    row('Government rebates', rebates, true) +
+    totRow('Total revenue', totalRev) +
+    `<div class="pl-row section-head">Cost of goods sold</div>` +
+    totRow('Total COGS', totalCosts) +
+    `<div class="pl-row ${gp>=0?'gp':'gp-neg'}"><span>Gross profit</span><span style="display:flex;align-items:center;gap:8px"><span class="pct-muted">${PCT(margin)}</span><span class="mono">${NZD(gp)}</span></span></div>` +
+    `<p style="font-size:12px;color:var(--gray-400);margin-top:12px;line-height:1.5">Overheads not included here — enter them in the Assumptions tab of your Google Sheet for net profit.</p>`;
+
+  document.getElementById('cost-breakdown').innerHTML =
+    [['Materials',mat],['Labour',lab],['Subcontractors',sub],['Permits',per],['Other',oth]]
+    .map(([l,v]) =>
+      `<div class="pl-row"><span class="indent">${l}</span><span style="display:flex;align-items:center;gap:8px"><span class="pct-muted">${totalCosts>0?PCT(v/totalCosts):'—'}</span><span class="mono">${NZD(v)}</span></span></div>`
+    ).join('') +
+    totRow('Total', totalCosts);
+}
+
+function renderProjects() {
+  const filter = document.getElementById('status-filter').value;
+  const filtered = filter ? projects.filter(p => p.status === filter) : projects;
+  document.getElementById('proj-count').textContent = filtered.length + ' project' + (filtered.length !== 1 ? 's' : '');
+  const badge = s => {
+    const cls = s==='Completed'?'badge-green':s==='In Progress'?'badge-amber':'badge-gray';
+    return `<span class="badge ${cls}">${s}</span>`;
+  };
+  document.getElementById('proj-body').innerHTML = filtered.map(p =>
+    `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px">${p.id}</td>
+      <td><div style="font-weight:500">${p.client}</div><div style="font-size:11px;color:var(--gray-400)">${p.name}</div></td>
+      <td>${badge(p.status)}</td>
+      <td style="color:var(--gray-600)">${p.kw?p.kw+'kW':'—'}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${NZD(p.rev)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${NZD(p.costs)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px" class="${p.gp>=0?'pos':'neg'}">${NZD(p.gp)}</td>
+      <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px" class="${p.margin>=0.2?'pos':p.margin<0?'neg':''}">${PCT(p.margin)}</td>
+    </tr>`
+  ).join('');
+}
+
+function signInGoogle() {
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}&response_type=token&scope=${encodeURIComponent(SCOPES)}&prompt=select_account`;
+  const w = window.open(url, 'googleauth', 'width=520,height=640,left=200,top=80');
+  if (!w) {
+    document.getElementById('sheets-status').textContent = 'Popup blocked — please allow popups for this page and try again';
+    return;
+  }
+  document.getElementById('sheets-status').textContent = 'Waiting for sign-in...';
+  const poll = setInterval(() => {
+    try {
+      if (!w || w.closed) { clearInterval(poll); document.getElementById('sheets-status').textContent = ''; return; }
+      const hash = w.location.hash;
+      if (hash && hash.includes('access_token')) {
+        const params = new URLSearchParams(hash.slice(1));
+        sheetsToken = params.get('access_token');
+        w.close();
+        clearInterval(poll);
+        document.getElementById('sheets-status').textContent = 'Signed in successfully';
+        document.getElementById('google-btn').textContent = 'Signed in to Google';
+        document.getElementById('google-btn').disabled = true;
+        document.getElementById('save-btn').style.display = 'inline-block';
+      }
+    } catch(e) {}
+  }, 600);
+}
+
+async function saveToSheets() {
+  if (!sheetsToken) { document.getElementById('sheets-status').textContent = 'Please sign in first'; return; }
+  if (!projects.length) { document.getElementById('sheets-status').textContent = 'Load project data first'; return; }
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  document.getElementById('sheets-status').textContent = 'Saving...';
+  try {
+    if (!sheetId) {
+      const create = await fetch('https://sheets.googleapis.com/v4/spreadsheets', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + sheetsToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          properties: { title: 'Solar P&L — ' + new Date().toLocaleDateString('en-NZ') },
+          sheets: [
+            { properties: { title: 'Project Register' } },
+            { properties: { title: 'P&L Summary' } },
+            { properties: { title: 'Assumptions' } }
+          ]
+        })
+      });
+      const created = await create.json();
+      if (!created.spreadsheetId) throw new Error(created.error?.message || 'Could not create sheet');
+      sheetId = created.spreadsheetId;
+    }
+
+    const headers = ['Project ID','Client','Project Name','Address','Install Date','Status','System kW','Contract Value ($)','Rebate ($)','Total Revenue ($)','Materials ($)','Labour ($)','Subcontractors ($)','Permits ($)','Other ($)','Total Costs ($)','Gross Profit ($)','GP Margin %'];
+    const rows = projects.map(p => [p.id,p.client,p.name,p.address,p.date,p.status,p.kw,p.contract_value,p.rebate,p.rev,p.materials,p.labour,p.subcontractors,p.permits,p.other,p.costs,p.gp,parseFloat((p.margin*100).toFixed(1))]);
+
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Project%20Register!A1?valueInputOption=RAW`, {
+      method: 'PUT', headers: { 'Authorization': 'Bearer ' + sheetsToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [headers, ...rows] })
+    });
+
+    const sum = k => projects.reduce((s,p) => s+(p[k]||0), 0);
+    const tRev = sum('contract_value')+sum('rebate'), tCost = sum('materials')+sum('labour')+sum('subcontractors')+sum('permits')+sum('other');
+    const gp = tRev - tCost;
+
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/P%26L%20Summary!A1?valueInputOption=RAW`, {
+      method: 'PUT', headers: { 'Authorization': 'Bearer ' + sheetsToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [
+        ['Solar P&L Summary',''],['Last synced', new Date().toLocaleString('en-NZ')],[''],
+        ['REVENUE',''],['Contract Revenue', sum('contract_value')],['Government Rebates', sum('rebate')],['Total Revenue', tRev],[''],
+        ['COST OF GOODS SOLD',''],['Materials', sum('materials')],['Labour', sum('labour')],['Subcontractors', sum('subcontractors')],['Permits', sum('permits')],['Other', sum('other')],['Total COGS', tCost],[''],
+        ['GROSS PROFIT', gp],['GP Margin %', parseFloat((gp/tRev*100).toFixed(1))],[''],
+        ['Total Projects', projects.length],['Total kW Installed', projects.reduce((s,p)=>s+(p.kw||0),0)]
+      ]})
+    });
+
+    await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Assumptions!A1?valueInputOption=RAW`, {
+      method: 'PUT', headers: { 'Authorization': 'Bearer ' + sheetsToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: [
+        ['OVERHEAD ASSUMPTIONS','Amount ($)','Notes'],
+        ['Sales & Marketing', 18000, 'Annual spend'],
+        ['Admin & Office', 12000, 'Rent, accounting etc.'],
+        ['Software & Tools', 4800, 'GetPylon, CRM pa'],
+        ['Vehicle & Travel', 15000, 'Fuel, rego'],
+        ['Warranty Provision', 8000, 'Set aside for claims'],
+        ['Other Overheads', 5000, 'Training, insurance'],
+        ['TOTAL OVERHEADS', '=SUM(B2:B7)', ''],
+        [''],
+        ['TAX','Rate',''],
+        ['Company Tax Rate', 0.28, 'NZ corporate rate (28%)'],
+      ]})
+    });
+
+    const url = 'https://docs.google.com/spreadsheets/d/' + sheetId;
+    document.getElementById('sheet-link').href = url;
+    document.getElementById('sheet-link-wrap').style.display = 'block';
+    document.getElementById('sheets-status').textContent = 'Saved successfully';
+    btn.textContent = 'Save again';
+  } catch(e) {
+    document.getElementById('sheets-status').textContent = 'Error: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+// Handle OAuth redirect back to this page
+(function() {
+  const hash = window.location.hash;
+  if (hash && hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.slice(1));
+    sheetsToken = params.get('access_token');
+    history.replaceState(null, '', window.location.pathname);
+    document.getElementById('sheets-status').textContent = 'Signed in successfully';
+    document.getElementById('google-btn').textContent = 'Signed in to Google';
+    document.getElementById('google-btn').disabled = true;
+    document.getElementById('save-btn').style.display = 'inline-block';
+    showTab('sheets');
+  }
+})();
+</script>
+</body>
+</html>
