@@ -529,54 +529,45 @@ function loadDemo() {
 async function loadPylon() {
   const btn = document.getElementById('load-btn');
   btn.disabled = true;
-  const status = document.getElementById('load-status');
-  status.textContent = 'Fetching from GetPylon...';
+  const statusEl = document.getElementById('load-status');
+  statusEl.textContent = 'Fetching from GetPylon...';
   try {
-    // Fetch all pages
     let allItems = [], page = 1, hasMore = true;
     while (hasMore) {
       const r = await fetch(WORKER_URL + '?page=' + page, { headers: { 'Accept': 'application/json' } });
       if (!r.ok) throw new Error('Worker returned ' + r.status);
       const data = await r.json();
       allItems = allItems.concat(data.data || []);
-      status.textContent = 'Loading... ' + allItems.length + ' projects so far';
+      statusEl.textContent = 'Loading... ' + allItems.length + ' projects';
       hasMore = !!data.links?.next && (data.data||[]).length > 0;
       page++;
-      if (page > 20) break; // safety limit
+      if (page > 20) break;
     }
 
     projects = allItems.map(item => {
+      // Worker returns { project: {...}, design: {...} }
       const proj = item.project || {};
       const design = item.design || {};
       const pa = proj.attributes || {};
       const da = design.attributes || {};
 
-      // Contract value — pricing.total is in cents with GST, convert to dollars ex-GST
+      // pricing.total is in NZD cents including GST — convert to dollars ex-GST
       const pricingTotal = da.pricing?.total || 0;
-      const contractValue = Math.round(pricingTotal / 1.15 / 100);
+      const contractValue = Math.round((pricingTotal / 100) / 1.15);
 
-      // System size from design summary
       const kw = da.summary?.dc_output_kw || 0;
-
-      // Panel and inverter brand from first module/inverter type
-      const panelBrand = (da.module_types || [])[0]?.description?.split(' ')[0] || '';
-      const inverterBrand = (da.inverter_types || [])[0]?.description?.split(' ')[0] || '';
-
-      // Categorise line items into cost buckets
+      const panelBrand = (da.module_types || [])[0]?.description || '';
+      const inverterBrand = (da.inverter_types || [])[0]?.description || '';
       const { materials, labour, other } = categoriseLineItems(da.line_items || []);
-
-      // Status from acceptance flags
-      const status = deriveStatus(pa.acceptance, pa.job_sheet_url);
-
-      // Use reference_number if set, otherwise Pylon internal ID
+      const projStatus = deriveStatus(pa.acceptance, pa.job_sheet_url);
       const id = pa.reference_number || proj.id || '';
 
       return calcProject({
         id,
-        client: pa.customer_details?.name || '(no name)',
+        client: pa.customer_details?.name || '—',
         address: [pa.site_address?.line1, pa.site_address?.city].filter(Boolean).join(', '),
-        date: pa.created_at ? pa.created_at.substring(0, 10) : '',
-        status,
+        date: (pa.created_at || '').substring(0, 10),
+        status: projStatus,
         kw,
         panelBrand,
         inverterBrand,
@@ -587,12 +578,13 @@ async function loadPylon() {
       });
     });
 
-    status.textContent = projects.length + ' projects loaded';
+    statusEl.textContent = projects.length + ' projects loaded';
     document.getElementById('sync-time').textContent = 'Synced ' + new Date().toLocaleTimeString('en-NZ', {hour:'2-digit',minute:'2-digit'});
     renderAll();
     showTab('pl');
   } catch(e) {
-    status.textContent = 'Error: ' + e.message;
+    statusEl.textContent = 'Error: ' + e.message;
+    console.error(e);
   }
   btn.disabled = false;
 }
