@@ -467,6 +467,43 @@ let sheetId = null;
 const NZD = v => '$' + Math.round(v).toLocaleString('en-NZ');
 const PCT = v => (v * 100).toFixed(1) + '%';
 
+// Categorise line items by description keyword matching
+function categoriseLineItems(lineItems) {
+  let materials = 0, labour = 0, other = 0;
+  (lineItems || []).forEach(item => {
+    if (item.is_amount_hidden) return; // skip duplicate hidden rows
+    const desc = (item.description || '').toLowerCase();
+    const amt = (item.total_amount || 0) / 1.15; // strip GST (15% NZ)
+    if (desc.includes('installation and labour') || desc.includes('installation & labour') ||
+        desc.includes('installation, hardware') || desc.includes('dg & inspection') ||
+        desc.includes('labour')) {
+      labour += amt;
+    } else if (desc.includes('solar panel') || desc.includes('inverter') ||
+               desc.includes('battery') || desc.includes('other component') ||
+               desc.includes('gateway') || desc.includes('panel') ||
+               desc.includes('module') || desc.includes('storage')) {
+      materials += amt;
+    } else {
+      other += amt;
+    }
+  });
+  return { materials, labour, other };
+}
+
+function deriveStatus(acceptance, jobSheetUrl) {
+  if (acceptance?.is_accepted) return 'Completed';
+  if (jobSheetUrl) return 'In Progress';
+  return 'Quoted';
+}
+
+function calcProject(p) {
+  const rev = (p.contract_value || 0);
+  const costs = (p.materials||0) + (p.labour||0) + (p.other||0);
+  const gp = rev - costs;
+  const margin = rev > 0 ? gp / rev : 0;
+  return {...p, rev, costs, gp, margin};
+}
+
 function showTab(t) {
   ['connect','pl','projects','sheets'].forEach(s => {
     document.getElementById('step-' + s).classList.toggle('active', s === t);
@@ -476,21 +513,13 @@ function showTab(t) {
   });
 }
 
-function calcProject(p) {
-  const rev = (p.contract_value || 0) + (p.rebate || 0);
-  const costs = (p.materials||0)+(p.labour||0)+(p.subcontractors||0)+(p.permits||0)+(p.other||0);
-  const gp = rev - costs;
-  const margin = rev > 0 ? gp / rev : 0;
-  return {...p, rev, costs, gp, margin};
-}
-
 function loadDemo() {
   projects = [
-    {id:'PYL-001',name:'Smith Residential',client:'John Smith',address:'12 Sunny Lane, Wellington',date:'2026-01-15',status:'Completed',kw:6.6,contract_value:14500,rebate:1400,materials:4200,labour:2100,subcontractors:0,permits:350,other:150},
-    {id:'PYL-002',name:'Acme Commercial Rooftop',client:'Acme Ltd',address:'45 Industrial Rd, Lower Hutt',date:'2026-02-03',status:'Completed',kw:30,contract_value:62000,rebate:3500,materials:18000,labour:9500,subcontractors:4000,permits:800,other:600},
-    {id:'PYL-003',name:'Jones Residential',client:'Mary Jones',address:'8 River St, Petone',date:'2026-02-28',status:'In Progress',kw:10,contract_value:21000,rebate:1800,materials:6500,labour:3200,subcontractors:0,permits:450,other:200},
-    {id:'PYL-004',name:'Green Fields Farm',client:'Green Fields Trust',address:'Rural Rd, Masterton',date:'2026-03-10',status:'In Progress',kw:50,contract_value:98000,rebate:5000,materials:29000,labour:15000,subcontractors:8000,permits:1200,other:900},
-    {id:'PYL-005',name:'Patel Residential',client:'Raj Patel',address:'33 Bay View, Eastbourne',date:'2026-03-22',status:'Quoted',kw:8,contract_value:17500,rebate:1400,materials:5200,labour:2600,subcontractors:0,permits:380,other:120},
+    {id:'PYL-001',client:'John Smith',address:'12 Sunny Lane, Christchurch',date:'2026-01-15',status:'Completed',kw:8.55,contract_value:9325,materials:3800,labour:2200,other:450},
+    {id:'PYL-002',client:'Chris McKernan',address:'51A Tauiwi Crescent, Christchurch',date:'2026-02-03',status:'Completed',kw:6.6,contract_value:7800,materials:3100,labour:1800,other:320},
+    {id:'PYL-003',client:'Lovett Family Farms',address:'282 River Road, Ashburton',date:'2026-02-28',status:'In Progress',kw:30,contract_value:38000,materials:16000,labour:7500,other:1200},
+    {id:'PYL-004',client:'Mike & Kate Baird',address:'20 Cedar Place, Rangiora',date:'2026-03-10',status:'In Progress',kw:10,contract_value:11500,materials:4800,labour:2600,other:500},
+    {id:'PYL-005',client:'Nik Bailey-Morris',address:'375a Lower Pitone Road, New Plymouth',date:'2026-03-22',status:'Quoted',kw:8,contract_value:8900,materials:3600,labour:2100,other:380},
   ].map(calcProject);
   document.getElementById('load-status').textContent = 'Demo data loaded';
   renderAll();
@@ -500,40 +529,70 @@ function loadDemo() {
 async function loadPylon() {
   const btn = document.getElementById('load-btn');
   btn.disabled = true;
-  document.getElementById('load-status').textContent = 'Fetching from GetPylon...';
+  const status = document.getElementById('load-status');
+  status.textContent = 'Fetching from GetPylon...';
   try {
-    const r = await fetch(WORKER_URL, {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (!r.ok) throw new Error('API returned ' + r.status);
-    const data = await r.json();
-    projects = (data.data || []).map(p => {
-      const a = p.attributes || {};
-      const c = a.costs || {};
-      const d = (a.designs || [])[0]?.attributes || {};
+    // Fetch all pages
+    let allItems = [], page = 1, hasMore = true;
+    while (hasMore) {
+      const r = await fetch(WORKER_URL + '?page=' + page, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) throw new Error('Worker returned ' + r.status);
+      const data = await r.json();
+      allItems = allItems.concat(data.data || []);
+      status.textContent = 'Loading... ' + allItems.length + ' projects so far';
+      hasMore = !!data.links?.next && (data.data||[]).length > 0;
+      page++;
+      if (page > 20) break; // safety limit
+    }
+
+    projects = allItems.map(item => {
+      const proj = item.project || {};
+      const design = item.design || {};
+      const pa = proj.attributes || {};
+      const da = design.attributes || {};
+
+      // Contract value — pricing.total is in cents with GST, convert to dollars ex-GST
+      const pricingTotal = da.pricing?.total || 0;
+      const contractValue = Math.round(pricingTotal / 1.15 / 100);
+
+      // System size from design summary
+      const kw = da.summary?.dc_output_kw || 0;
+
+      // Panel and inverter brand from first module/inverter type
+      const panelBrand = (da.module_types || [])[0]?.description?.split(' ')[0] || '';
+      const inverterBrand = (da.inverter_types || [])[0]?.description?.split(' ')[0] || '';
+
+      // Categorise line items into cost buckets
+      const { materials, labour, other } = categoriseLineItems(da.line_items || []);
+
+      // Status from acceptance flags
+      const status = deriveStatus(pa.acceptance, pa.job_sheet_url);
+
+      // Use reference_number if set, otherwise Pylon internal ID
+      const id = pa.reference_number || proj.id || '';
+
       return calcProject({
-        id: a.reference_number || p.id,
-        name: a.name || '',
-        client: a.customer_details?.name || '',
-        address: [a.site_address?.line1, a.site_address?.city].filter(Boolean).join(', '),
-        date: a.install_date || '',
-        status: a.status || '',
-        kw: d.dc_output_kw || 0,
-        contract_value: c.contract_value || 0,
-        rebate: c.govt_rebate || 0,
-        materials: c.materials || 0,
-        labour: c.labour || 0,
-        subcontractors: c.subcontractors || 0,
-        permits: c.permits || 0,
-        other: c.other || 0,
+        id,
+        client: pa.customer_details?.name || '(no name)',
+        address: [pa.site_address?.line1, pa.site_address?.city].filter(Boolean).join(', '),
+        date: pa.created_at ? pa.created_at.substring(0, 10) : '',
+        status,
+        kw,
+        panelBrand,
+        inverterBrand,
+        contract_value: contractValue,
+        materials: Math.round(materials),
+        labour: Math.round(labour),
+        other: Math.round(other),
       });
     });
-    document.getElementById('load-status').textContent = projects.length + ' projects loaded';
+
+    status.textContent = projects.length + ' projects loaded';
     document.getElementById('sync-time').textContent = 'Synced ' + new Date().toLocaleTimeString('en-NZ', {hour:'2-digit',minute:'2-digit'});
     renderAll();
     showTab('pl');
   } catch(e) {
-    document.getElementById('load-status').textContent = 'Error: ' + e.message;
+    status.textContent = 'Error: ' + e.message;
   }
   btn.disabled = false;
 }
@@ -562,11 +621,10 @@ function renderKPIs() {
 
 function renderPL() {
   const sum = k => projects.reduce((s,p) => s + (p[k]||0), 0);
-  const contractRev = sum('contract_value'), rebates = sum('rebate');
-  const totalRev = contractRev + rebates;
-  const mat = sum('materials'), lab = sum('labour'), sub = sum('subcontractors');
-  const per = sum('permits'), oth = sum('other');
-  const totalCosts = mat + lab + sub + per + oth;
+  const contractRev = sum('contract_value');
+  const totalRev = contractRev;
+  const mat = sum('materials'), lab = sum('labour'), oth = sum('other');
+  const totalCosts = mat + lab + oth;
   const gp = totalRev - totalCosts;
   const margin = totalRev > 0 ? gp / totalRev : 0;
 
@@ -577,16 +635,18 @@ function renderPL() {
 
   document.getElementById('pl-statement').innerHTML =
     `<div class="pl-row section-head">Revenue</div>` +
-    row('Contract revenue', contractRev, true) +
-    row('Government rebates', rebates, true) +
+    row('Contract revenue (ex GST)', contractRev, true) +
     totRow('Total revenue', totalRev) +
     `<div class="pl-row section-head">Cost of goods sold</div>` +
+    row('Materials & equipment', mat, true) +
+    row('Installation & labour', lab, true) +
+    row('Other', oth, true) +
     totRow('Total COGS', totalCosts) +
     `<div class="pl-row ${gp>=0?'gp':'gp-neg'}"><span>Gross profit</span><span style="display:flex;align-items:center;gap:8px"><span class="pct-muted">${PCT(margin)}</span><span class="mono">${NZD(gp)}</span></span></div>` +
-    `<p style="font-size:12px;color:var(--gray-400);margin-top:12px;line-height:1.5">Overheads not included here — enter them in the Assumptions tab of your Google Sheet for net profit.</p>`;
+    `<p style="font-size:12px;color:var(--gray-400);margin-top:12px;line-height:1.5">All figures ex GST. Overheads entered in the Assumptions tab of your Google Sheet.</p>`;
 
   document.getElementById('cost-breakdown').innerHTML =
-    [['Materials',mat],['Labour',lab],['Subcontractors',sub],['Permits',per],['Other',oth]]
+    [['Materials & equipment', mat], ['Installation & labour', lab], ['Other', oth]]
     .map(([l,v]) =>
       `<div class="pl-row"><span class="indent">${l}</span><span style="display:flex;align-items:center;gap:8px"><span class="pct-muted">${totalCosts>0?PCT(v/totalCosts):'—'}</span><span class="mono">${NZD(v)}</span></span></div>`
     ).join('') +
@@ -666,8 +726,8 @@ async function saveToSheets() {
       sheetId = created.spreadsheetId;
     }
 
-    const headers = ['Project ID','Client','Project Name','Address','Install Date','Status','System kW','Contract Value ($)','Rebate ($)','Total Revenue ($)','Materials ($)','Labour ($)','Subcontractors ($)','Permits ($)','Other ($)','Total Costs ($)','Gross Profit ($)','GP Margin %'];
-    const rows = projects.map(p => [p.id,p.client,p.name,p.address,p.date,p.status,p.kw,p.contract_value,p.rebate,p.rev,p.materials,p.labour,p.subcontractors,p.permits,p.other,p.costs,p.gp,parseFloat((p.margin*100).toFixed(1))]);
+    const headers = ['Project ID','Client','Address','Install Date','Status','System kW','Panel Brand','Inverter Brand','Contract Value ex GST ($)','Materials ($)','Labour ($)','Other ($)','Total Costs ($)','Gross Profit ($)','GP Margin %'];
+    const rows = projects.map(p => [p.id,p.client,p.address,p.date,p.status,p.kw,p.panelBrand||'',p.inverterBrand||'',p.contract_value,p.materials,p.labour,p.other,p.costs,p.gp,parseFloat((p.margin*100).toFixed(1))]);
 
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Project%20Register!A1?valueInputOption=RAW`, {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + sheetsToken, 'Content-Type': 'application/json' },
@@ -675,15 +735,15 @@ async function saveToSheets() {
     });
 
     const sum = k => projects.reduce((s,p) => s+(p[k]||0), 0);
-    const tRev = sum('contract_value')+sum('rebate'), tCost = sum('materials')+sum('labour')+sum('subcontractors')+sum('permits')+sum('other');
+    const tRev = sum('contract_value'), tCost = sum('materials')+sum('labour')+sum('other');
     const gp = tRev - tCost;
 
     await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/P%26L%20Summary!A1?valueInputOption=RAW`, {
       method: 'PUT', headers: { 'Authorization': 'Bearer ' + sheetsToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ values: [
         ['Solar P&L Summary',''],['Last synced', new Date().toLocaleString('en-NZ')],[''],
-        ['REVENUE',''],['Contract Revenue', sum('contract_value')],['Government Rebates', sum('rebate')],['Total Revenue', tRev],[''],
-        ['COST OF GOODS SOLD',''],['Materials', sum('materials')],['Labour', sum('labour')],['Subcontractors', sum('subcontractors')],['Permits', sum('permits')],['Other', sum('other')],['Total COGS', tCost],[''],
+        ['REVENUE',''],['Contract Revenue (ex GST)', sum('contract_value')],['Total Revenue', tRev],[''],
+        ['COST OF GOODS SOLD',''],['Materials & Equipment', sum('materials')],['Installation & Labour', sum('labour')],['Other', sum('other')],['Total COGS', tCost],[''],
         ['GROSS PROFIT', gp],['GP Margin %', parseFloat((gp/tRev*100).toFixed(1))],[''],
         ['Total Projects', projects.length],['Total kW Installed', projects.reduce((s,p)=>s+(p.kw||0),0)]
       ]})
