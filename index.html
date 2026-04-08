@@ -373,15 +373,13 @@
   <div id="step-connect" class="step active">
     <div class="card" style="max-width:560px">
       <div class="card-title">Connect to GetPylon</div>
-      <p style="font-size:13px;color:var(--gray-600);margin-bottom:1.25rem;line-height:1.6">Enter your API token to pull live project data. Find it in GetPylon → Team Settings → API.</p>
-      <label>GetPylon API token</label>
-      <input type="password" id="token-input" placeholder="Paste your token here"/>
+      <p style="font-size:13px;color:var(--gray-600);margin-bottom:1.25rem;line-height:1.6">Pulls your live project data securely via your Cloudflare Worker. Your API token is stored safely as a Worker secret — never exposed in the browser.</p>
       <div class="btn-row">
-        <button class="btn btn-primary" onclick="loadPylon()" id="load-btn">Load my projects</button>
+        <button class="btn btn-primary" onclick="loadPylon()" id="load-btn">Load my projects from GetPylon</button>
         <button class="btn" onclick="loadDemo()">Use demo data</button>
         <span class="status-msg" id="load-status"></span>
       </div>
-      <p class="hint">Your token is used only in this session and sent directly to api.getpylon.com — it is never stored elsewhere.</p>
+      <p class="hint">Calling pylon-proxy.andy-c6c.workers.dev &nbsp;·&nbsp; Token stored securely as PYLON_TOKEN in Cloudflare</p>
     </div>
   </div>
 
@@ -461,6 +459,7 @@
 <script>
 const CLIENT_ID = '726614095561-3q9pn4uu6h7np3neqe36s4f7ceev0p5g.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+const WORKER_URL = 'https://pylon-proxy.andy-c6c.workers.dev';
 let projects = [];
 let sheetsToken = null;
 let sheetId = null;
@@ -499,14 +498,12 @@ function loadDemo() {
 }
 
 async function loadPylon() {
-  const token = document.getElementById('token-input').value.trim();
-  if (!token) { document.getElementById('load-status').textContent = 'Please enter your API token'; return; }
   const btn = document.getElementById('load-btn');
   btn.disabled = true;
   document.getElementById('load-status').textContent = 'Fetching from GetPylon...';
   try {
-    const r = await fetch('https://api.getpylon.com/v1/solar_projects', {
-      headers: { 'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.api+json' }
+    const r = await fetch(WORKER_URL, {
+      headers: { 'Accept': 'application/json' }
     });
     if (!r.ok) throw new Error('API returned ' + r.status);
     const data = await r.json();
