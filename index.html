@@ -468,12 +468,14 @@ const NZD = v => '$' + Math.round(v).toLocaleString('en-NZ');
 const PCT = v => (v * 100).toFixed(1) + '%';
 
 // Categorise line items by description keyword matching
+// Line item amounts are in cents including GST — convert to dollars ex-GST
 function categoriseLineItems(lineItems) {
   let materials = 0, labour = 0, other = 0;
   (lineItems || []).forEach(item => {
     if (item.is_amount_hidden) return; // skip duplicate hidden rows
+    if (item.included_in_summary_line === 'none') return; // skip component detail rows
     const desc = (item.description || '').toLowerCase();
-    const amt = (item.total_amount || 0) / 1.15; // strip GST (15% NZ)
+    const amt = (item.total_amount || 0) / 100 / 1.15; // cents → dollars → ex-GST
     if (desc.includes('installation and labour') || desc.includes('installation & labour') ||
         desc.includes('installation, hardware') || desc.includes('dg & inspection') ||
         desc.includes('labour')) {
@@ -551,6 +553,11 @@ async function loadPylon() {
       const pa = proj.attributes || {};
       const da = design.attributes || {};
 
+      const projStatus = deriveStatus(pa.acceptance, pa.job_sheet_url);
+
+      // Only include completed projects
+      if (projStatus !== 'Completed') return null;
+
       // pricing.total is in NZD cents including GST — convert to dollars ex-GST
       const pricingTotal = da.pricing?.total || 0;
       const contractValue = Math.round((pricingTotal / 100) / 1.15);
@@ -559,7 +566,6 @@ async function loadPylon() {
       const panelBrand = (da.module_types || [])[0]?.description || '';
       const inverterBrand = (da.inverter_types || [])[0]?.description || '';
       const { materials, labour, other } = categoriseLineItems(da.line_items || []);
-      const projStatus = deriveStatus(pa.acceptance, pa.job_sheet_url);
       const id = pa.reference_number || proj.id || '';
 
       return calcProject({
@@ -576,7 +582,7 @@ async function loadPylon() {
         labour: Math.round(labour),
         other: Math.round(other),
       });
-    });
+    }).filter(Boolean);
 
     statusEl.textContent = projects.length + ' projects loaded';
     document.getElementById('sync-time').textContent = 'Synced ' + new Date().toLocaleTimeString('en-NZ', {hour:'2-digit',minute:'2-digit'});
