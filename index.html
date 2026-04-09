@@ -414,7 +414,7 @@
         <table>
           <thead><tr>
             <th style="width:100px">Ref</th>
-            <th style="width:22%">Client</th>
+            <th style="width:30%">Client / Address</th>
             <th style="width:95px">Status</th>
             <th style="width:60px">kW</th>
             <th style="width:110px;text-align:right">Revenue</th>
@@ -468,22 +468,30 @@ const NZD = v => '$' + Math.round(v).toLocaleString('en-NZ');
 const PCT = v => (v * 100).toFixed(1) + '%';
 
 // Categorise line items by description keyword matching
-// Line item amounts are in cents including GST — convert to dollars ex-GST
+// Amounts are in cents including GST — convert to dollars ex-GST
+// Skip rows where is_amount_hidden=true (these are component detail rows already
+// captured in the bundle summary row above them)
 function categoriseLineItems(lineItems) {
   let materials = 0, labour = 0, other = 0;
   (lineItems || []).forEach(item => {
-    if (item.is_amount_hidden) return; // skip duplicate hidden rows
-    if (item.included_in_summary_line === 'none') return; // skip component detail rows
+    if (item.is_amount_hidden) return; // skip component detail/duplicate rows
+    if (item.is_line_hidden) return;   // skip hidden lines
+    const total = item.total_amount;
+    if (!total) return;               // skip null/zero amount rows
     const desc = (item.description || '').toLowerCase();
-    const amt = (item.total_amount || 0) / 100 / 1.15; // cents → dollars → ex-GST
-    if (desc.includes('installation and labour') || desc.includes('installation & labour') ||
-        desc.includes('installation, hardware') || desc.includes('dg & inspection') ||
-        desc.includes('labour')) {
+    const amt = total / 100 / 1.15;  // cents → dollars → ex-GST
+    if (desc.includes('installation') || desc.includes('labour') || desc.includes('hardware')) {
       labour += amt;
-    } else if (desc.includes('solar panel') || desc.includes('inverter') ||
-               desc.includes('battery') || desc.includes('other component') ||
-               desc.includes('gateway') || desc.includes('panel') ||
-               desc.includes('module') || desc.includes('storage')) {
+    } else if (desc.includes('solar') || desc.includes('inverter') ||
+               desc.includes('battery') || desc.includes('storage') ||
+               desc.includes('panel') || desc.includes('module') ||
+               desc.includes('gateway') || desc.includes('anker') ||
+               desc.includes('goodwe') || desc.includes('trina') ||
+               desc.includes('ae solar') || desc.includes('canadian') ||
+               desc.includes('sunpower') || desc.includes('ja solar') ||
+               desc.includes('fronius') || desc.includes('sma') ||
+               desc.includes('huawei') || desc.includes('longi') ||
+               desc.includes('charger') || desc.includes('ev ')) {
       materials += amt;
     } else {
       other += amt;
@@ -662,7 +670,7 @@ function renderProjects() {
   document.getElementById('proj-body').innerHTML = filtered.map(p =>
     `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:12px">${p.id}</td>
-      <td><div style="font-weight:500">${p.client}</div><div style="font-size:11px;color:var(--gray-400)">${p.name}</div></td>
+      <td style="white-space:normal"><div style="font-weight:500">${p.client||'—'}</div><div style="font-size:11px;color:var(--gray-400)">${p.address}</div></td>
       <td>${badge(p.status)}</td>
       <td style="color:var(--gray-600)">${p.kw?p.kw+'kW':'—'}</td>
       <td style="text-align:right;font-family:'DM Mono',monospace;font-size:12px">${NZD(p.rev)}</td>
