@@ -563,9 +563,6 @@ async function loadPylon() {
 
       const projStatus = deriveStatus(pa.acceptance, pa.job_sheet_url);
 
-      // Only include completed projects
-      if (projStatus !== 'Completed') return null;
-
       // pricing.total is in NZD cents including GST — convert to dollars ex-GST
       const pricingTotal = da.pricing?.total || 0;
       const contractValue = Math.round((pricingTotal / 100) / 1.15);
